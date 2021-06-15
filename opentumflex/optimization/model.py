@@ -93,6 +93,9 @@ def create_model(ems_local):
     m.bat_SOC_init = pyen.Param(initialize=bat_param['initSOC'])
     m.bat_power_max = pyen.Param(initialize=bat_param['maxpow'])
     m.bat_eta = pyen.Param(initialize=bat_param['eta'])
+    #bat_aval = bat_param['aval']
+    #m.bat_aval = pyen.Param(m.t, initialize=1, mutable=True)
+
 
     # heat pump
     hp_param = devices['hp']
@@ -117,6 +120,7 @@ def create_model(ems_local):
     m.ev_sto_cap = pyen.Param(initialize=ev_param['stocap'])
     m.ev_eta = pyen.Param(initialize=ev_param['eta'])
     m.ev_aval = pyen.Param(m.t, initialize=1, mutable=True)
+    m.flex_type = pyen.Param(m.t, initialize=0, mutable=True)
     m.ev_charg_amount = m.ev_sto_cap * (ev_param['endSOC'][-1] - ev_param['initSOC'][0]) / 100
     ev_soc_init = ev_param['initSOC']
     ev_soc_end = ev_param['endSOC']
@@ -141,17 +145,26 @@ def create_model(ems_local):
     # m.pv_effic = pyen.Param(initialize=pv_param['eta'])
     m.pv_peak_power = pyen.Param(initialize=pv_param['maxpow'])
     m.solar = pyen.Param(m.t, initialize=1, mutable=True)
+    m.solar_act = pyen.Param(m.t, initialize=1, mutable=True)
+    m.grid_export =  pyen.Param(m.t, initialize=1, mutable=True)
+    m.grid_import = pyen.Param(m.t, initialize=1, mutable=True)
+ 
 
     #    for t in m.t_UP:
     #        m.t_dn[t] = t_dn
     #        m.t_up[t] = t_dn
-
+    
+    #flex_value
+    if 'flex_value' in ems_local['reoptim']:
+       
+        m.flex_value = pyen.Param(m.t, initialize=0, mutable=True)
+    
     # price
     m.ele_price_in, m.ele_price_out, m.gas_price = (pyen.Param(m.t, initialize=1, mutable=True) for i in range(3))
 
     # lastprofil
     m.lastprofil_heat, m.lastprofil_elec = (pyen.Param(m.t, initialize=1, mutable=True) for i in range(2))
-
+    
     for t in m.t:
         # weather data
         m.ele_price_in[t] = time_series.loc[t]['ele_price_in']
@@ -160,8 +173,11 @@ def create_model(ems_local):
         m.lastprofil_heat[t] = time_series.loc[t]['load_heat']
         m.lastprofil_elec[t] = time_series.loc[t]['load_elec']
         m.solar[t] = time_series.loc[t]['solar_power']
+        
+        
         # fill the ev availability
         m.ev_aval[t] = ev_aval[t]
+        #m.bat_aval[t] = bat_aval[t]
         # calculate the spline function for thermal power of heat pump
         spl_elec_pow = UnivariateSpline(list(map(float, hp_elec_cap.columns.values)),
                                         list(hp_elec_cap.loc[hp_supply_temp, :]))
@@ -173,6 +189,22 @@ def create_model(ems_local):
         # calculate the chp electric and thermal power when it's running
         m.chp_heat_run[t] = m.chp_elec_run[t] / m.chp_elec_effic[t] * m.chp_ther_effic[t]
         m.chp_gas_run[t] = m.chp_elec_run[t] / m.chp_elec_effic[t]
+        
+        
+        m.solar_act[t] = time_series.loc[t]['solar_power']
+        if 'type_flex' in ems_local['reoptim']:
+            
+
+            if 'grid_export' in ems_local['optplan']:
+                m.grid_export[t] = ems_local['optplan']['grid_export'][t]
+                m.grid_import[t] = ems_local['optplan']['grid_import'][t]
+                m.flex_type[t] = ems_local['reoptim']['type_flex'][t]
+                m.flex_value[t] = ems_local['reoptim']['flex_value'][t]
+            else:
+                m.flex_type[t] = 0 
+            
+            
+            
 
     # m.ele_price = ele_price
 
@@ -249,9 +281,65 @@ def create_model(ems_local):
     m.bat_e_cont_def = pyen.Constraint(m.t,
                                        rule=battery_e_cont_def_rule,
                                        doc='battery_balance')
+    
+    
+    
+
+        
+    def elec_export_rule(m, t):
+        if m.flex_type[t] == 1:
+            
+            def solar_power_max(m,t):
+                return m.solar_act[t] <= m.solar[t] 
+            m.solar_power_ma = pyen.Constraint(m.t,
+                                        rule=solar_power_max)
+                      
+            return m.elec_export[t] == m.grid_export[t] - m.flex_value[t]
+        
+        
+        elif m.flex_type[t] == 2:
+            return m.elec_export[t] == value(m.grid_export[t] + m.flex_value[t])
+        
+        # elif m.flex_type[t] == 3:
+        #     if value(m.grid_export[t]) > 0 and value(m.grid_export[t]) >= value(m.flex_value[t]):
+        #         return m.elec_export[t] == abs(value(m.grid_export[t] - m.flex_value[t]))
+        #     else:
+        #         return m.elec_export[t] == 0
+        else:
+            
+            
+            
+            
+            return m.elec_export[t] <= 50 * 5000 
+    
+    
+    
+    m.elec_export_def = pyen.Constraint(m.t, rule=elec_export_rule)
+    # elec_import
+    def elec_import_rule(m, t):
+        # if m.flex_type[t] == 3:
+        #     if value(m.grid_import[t]) == 0 and value(m.grid_export[t]) >= value(m.flex_value[t]):
+        #         return m.elec_import[t] == 0
+        #     else:
+        #         return m.elec_import[t] >=   m.grid_import[t] + m.flex_value[t] - m.grid_export[t] 
+          
+            
+        return m.elec_import[t] <= 50 * 5000
+
+    m.elec_import_def = pyen.Constraint(m.t,
+                                        rule=elec_import_rule)
+        
+    
+
+            
+        
+      
+    
+
+    
 
     def elec_balance_rule(m, t):
-        return m.elec_import[t] + m.CHP_run[t] * m.chp_elec_run[t] + m.PV_cap[t] * m.solar[t] - \
+        return m.elec_import[t] + m.CHP_run[t] * m.chp_elec_run[t] + m.PV_cap[t] * m.solar_act[t] - \
                m.elec_export[t] - m.hp_run[t] * m.hp_elec_pow[t] - m.lastprofil_elec[t] - \
                (m.bat_pow_pos[t] - m.bat_pow_neg[t]) - m.ev_power[t] == 0
 
@@ -327,19 +415,11 @@ def create_model(ems_local):
     m.pv_max_cap_def = pyen.Constraint(m.t,
                                        rule=pv_max_cap_rule)
 
-    # elec_import
-    def elec_import_rule(m, t):
-        return m.elec_import[t] <= 50 * 5000
+   
+  
 
-    m.elec_import_def = pyen.Constraint(m.t,
-                                        rule=elec_import_rule)
-
-    # elec_export
-    def elec_export_rule(m, t):
-        return m.elec_export[t] <= 50 * 5000
-
-    m.elec_export_def = pyen.Constraint(m.t,
-                                        rule=elec_export_rule)
+    
+    
 
     # storage
     # storage content
@@ -382,13 +462,27 @@ def create_model(ems_local):
                                         rule=sto_e_max_pow_rule_2)
 
     def bat_e_max_pow_rule_1(m, t):
-        return m.bat_pow_pos[t] <= min(m.bat_power_max, m.bat_cont_max)
+        #return m.bat_pow_pos[t] <= min(m.bat_power_max , m.bat_cont_max )*m.bat_aval[t]
+        if m.flex_type[t] == 3:
+            return m.bat_pow_pos[t] == m.bat_power_max
+        elif m.flex_type[t] == 4:
+            return m.bat_pow_pos[t] ==0 
+        else:
+            return m.bat_pow_pos[t] <= min(m.bat_power_max , m.bat_cont_max )
+    
 
     m.bat_e_pow_max_1 = pyen.Constraint(m.t,
                                         rule=bat_e_max_pow_rule_1)
 
     def bat_e_max_pow_rule_2(m, t):
-        return m.bat_pow_neg[t] <= min(m.bat_power_max, m.bat_cont_max)
+        if m.flex_type[t] == 3:
+            return m.bat_pow_neg[t] ==0 
+        elif m.flex_type[t] == 4:
+            
+            return m.bat_pow_neg[t] == m.bat_power_max 
+        else:
+            return m.bat_pow_neg[t] <= min(m.bat_power_max , m.bat_cont_max )
+        #return m.bat_pow_neg[t] <= min(m.bat_power_max , m.bat_cont_max )* m.bat_aval[t]
 
     m.bat_e_pow_max_2 = pyen.Constraint(m.t,
                                         rule=bat_e_max_pow_rule_2)

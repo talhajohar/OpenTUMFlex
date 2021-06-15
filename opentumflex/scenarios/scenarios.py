@@ -51,10 +51,16 @@ def scenario_pv(ems):
         - ems: ems model instance
 
     """
-    ems['devices'].update(create_device(device_name='pv', minpow=0.5, maxpow=3, eta=0.95))
-    ems['devices']['sto']['maxpow'] = 10
-    ems['devices']['sto']['stocap'] = 15
-    ems['devices']['boiler']['maxpow'] = 6
+    
+    ems['devices']['ev']['aval'] = [0] * len(ems['devices']['ev']['aval'])    
+    # ems['devices'].update(create_device(device_name='bat', minpow=0, maxpow=5, stocap=2.5, init_soc=100, eta=0.96))
+
+    # ems['devices']['sto']['maxpow'] = 1
+    # ems['devices']['sto']['stocap'] = 15
+    # ems['devices']['boiler']['maxpow'] = 6
+    # ems['devices']['sto']['maxpow'] = 4
+    # ems['devices']['sto']['stocap'] = 10
+    # ems['devices']['boiler']['maxpow'] = 6
     return ems
 
 
@@ -116,8 +122,8 @@ def scenario_residential_house(ems):
         - ems: ems model instance
 
     """
-    ems['devices'].update(create_device(device_name='pv', minpow=0.5, maxpow=3, eta=0.95))
-    ems['devices'].update(create_device(device_name='bat', minpow=0, maxpow=3, stocap=5, init_soc=5, eta=0.95))
+    ems['devices'].update(create_device(device_name='pv', minpow=0, maxpow=3, eta=0.95))
+    ems['devices'].update(create_device(device_name='bat', minpow=0, maxpow=5, stocap=2.5, init_soc=50, eta=0.95))
     ems['devices']['sto']['maxpow'] = 10
     ems['devices']['sto']['stocap'] = 15
     ems['devices']['boiler']['maxpow'] = 3

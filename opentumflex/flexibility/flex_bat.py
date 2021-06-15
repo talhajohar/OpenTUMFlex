@@ -14,6 +14,7 @@ __status__ = "Development"
 
 import pandas as pd
 import statistics
+import numpy as np
 
 
 def calc_flex_bat(my_ems, reopt):
@@ -46,22 +47,24 @@ def calc_flex_bat(my_ems, reopt):
         Bat_flex.iloc[i, 0] = dat1.iloc[i, 2]  - dat1.iloc[i, 1]
         nflex_P = Bat_maxP-dat1.iloc[i, 1]+dat1.iloc[i, 2]
         if (dat1.iloc[i, 3]*Bat_maxE/100 < Bat_maxE) and (nflex_P > 0):
-            req_steps = int(round(ntsteps*(Bat_maxE-dat1.iloc[i, 3]*Bat_maxE/100)/nflex_P))
-            if nflex_P < Bat_minP:
+            #round command changed to np.floor command
+            req_steps = int(np.floor(ntsteps*(Bat_maxE-dat1.iloc[i, 3]*Bat_maxE/100)/nflex_P))
+            if nflex_P < Bat_minP: #flexibilty power can not be offered as less than minimum power
                 req_steps = 0
+                
             elif (req_steps != 0) and (req_steps + i <= nsteps-1): 
                 req_steps = req_steps + i
             elif req_steps != 0:
                 req_steps = nsteps - 1
-    
+            #print(i,req_steps,(ntsteps*(Bat_maxE-dat1.iloc[i, 3]*Bat_maxE/100)/nflex_P),nflex_P,dat1.iloc[i, 3])
             if req_steps > 0:                                
                 j = i
                 while (j < nsteps) and (j < req_steps) and \
-                        nflex_P <= (Bat_maxP-dat1.iloc[j, 1]+dat1.iloc[j, 2]):
+                        nflex_P <= (Bat_maxP-dat1.iloc[j, 1]+dat1.iloc[j, 2]): 
                     j = j+1
                 Bat_flex.iloc[i, 1] = -1*nflex_P
                 Bat_flex.iloc[i, 3] = Bat_flex.iloc[i, 1]*(j-i)/ntsteps
-    
+                
             # Usable energy
                 cbat_E = 0
                 for k in range(j, nsteps):
@@ -110,23 +113,26 @@ def calc_flex_bat(my_ems, reopt):
         ava_ebatout = dat1.iloc[i, 3]*Bat_maxE/100 - Bat_minE
         ava_steps = 0
         if ava_ebatout > 0:
-            pflex_P = Bat_maxP - dat1.iloc[i, 0] + dat1.iloc[i, 1] - dat1.iloc[i, 2]
+            pflex_P = Bat_maxP - dat1.iloc[i, 2]
+            #print(pflex_P)
             if pflex_P > 0:
-                ava_steps = int(round(ntsteps*ava_ebatout/pflex_P))
+                ava_steps = int(np.floor(ntsteps*ava_ebatout/pflex_P)) #changed round to np.floor
+                
+                #print(i,ntsteps*ava_ebatout/pflex_P,pflex_P,ava_ebatout)
                 if (Bat_maxP - dat1.iloc[i, 2]) < Bat_minP:
                     ava_steps = 0
                 elif (ava_steps != 0) and (ava_steps + i <= nsteps-1):
                     ava_steps = ava_steps + i
                 elif ava_steps != 0:
                     ava_steps = nsteps-1  
-            
+                #print(i,ava_steps)
             if ava_steps > 0:
                 j = i
                 while (j < nsteps) and (j < ava_steps) and  \
-                        pflex_P <= (Bat_maxP-dat1.iloc[j, 2]):
+                        pflex_P <= (Bat_maxP - dat1.iloc[j, 2]): #changed formula for flexibility calculation for j time step
                     # Add minimum pos flex power in the previous line
                     j = j+1
-                Bat_flex.iloc[i, 2] = (Bat_maxP-dat1.iloc[i, 2])
+                Bat_flex.iloc[i, 2] = pflex_P
                 Bat_flex.iloc[i, 4] = Bat_flex.iloc[i, 2]*(j-i)/ntsteps    
                 
                 # Rechargable energy
@@ -147,11 +153,11 @@ def calc_flex_bat(my_ems, reopt):
             
     # Curtailing scheduled charging
     for i in range(nsteps):
-         if dat1.iloc[i, 0] > Bat_minP:
+         if dat1.iloc[i, 0] > 0:
              j = i
              while (j < nsteps) and (dat1.iloc[i, 0] <= dat1.iloc[j, 0]):
                  j = j+1
-             pflex_P = dat1.iloc[i, 0]
+             pflex_P = dat1.iloc[i, 1]
              Bat_flex.iloc[i, 2] = Bat_flex.iloc[i, 2] + pflex_P
              Bat_flex.iloc[i, 4] = Bat_flex.iloc[i, 4] + pflex_P*(j-i)/ntsteps  
              

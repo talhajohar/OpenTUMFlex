@@ -59,13 +59,13 @@ def plot_aggregated_flex_power(ems, reopt=0):
         # Loop through the device list and stack plot
         for i in range(len(device)):
             plt.bar(ts, ems['flexopts'][device[i]]['Pos_P'], color=chart[i], 
-                               bottom=bottom_pos, align='edge', edgecolor='k', label=device[i].upper())
+                               bottom=bottom_pos, align='edge', edgecolor='k', label=device[i].upper(),alpha = 0.8)
             plt.bar(ts, ems['flexopts'][device[i]]['Neg_P'], color=chart[i], 
-                               bottom=bottom_neg, align='edge', edgecolor='k')
+                               bottom=bottom_neg, align='edge', edgecolor='k', alpha = 0.8)
             
             # Update bottom values
-            bottom_pos = list(map(add, bottom_pos,ems['flexopts'][device[i]]['Pos_P'].tolist()))
-            bottom_neg = list(map(add, bottom_neg,ems['flexopts'][device[i]]['Neg_P'].tolist()))
+            #bottom_pos = list(map(add, bottom_pos,ems['flexopts'][device[i]]['Pos_P'].tolist()))
+            #bottom_neg = list(map(add, bottom_neg,ems['flexopts'][device[i]]['Neg_P'].tolist()))
         
         # Change xtick intervals    
         plt.yticks(fontsize=font_size-2)

@@ -21,6 +21,9 @@ from opentumflex.market_communication.generate_market_offers import save_offers_
 from opentumflex.optimization.report import save_results
 from opentumflex.optimization.model import create_model, solve_model, extract_res
 from opentumflex.plot.plot_optimal_results import plot_optimal_results
+
+from opentumflex.plot.plot_optimal_results import compare_optimal_results
+
 from opentumflex.plot.plot_flex_reoptimized import plot_cumm_energy_reoptimized, plot_flex_reoptimized, \
     plot_compare_optim_reoptim
 from opentumflex.plot.plot_flex import plot_flex
@@ -28,4 +31,5 @@ from opentumflex.plot.plot_aggregated_flex import plot_aggregated_flex_power
 from opentumflex.plot.plot_aggregated_flex import plot_aggregated_flex_price
 from opentumflex.scenarios.scenarios import *
 from .run_scenario import run_scenario
+from .run_scenario_reopt import run_scenario_reopt
 

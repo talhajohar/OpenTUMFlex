@@ -17,6 +17,7 @@ import opentumflex
 
 # general modules
 import os
+import pandas as pd
 
 
 def run_scenario(scenario, path_input, path_results, solver='glpk', time_limit=30, troubleshooting=True,
@@ -38,19 +39,30 @@ def run_scenario(scenario, path_input, path_results, solver='glpk', time_limit=3
         opentumflex dictionary with optimization results and flexibility offers
 
     """
-
+    init_time_step =0
+    end_step =96
+    
     # initialize with basic time settings
-    my_ems = opentumflex.initialize_time_setting(t_inval=15, start_time='2019-12-18 00:00', end_time='2019-12-18 23:45')
-
+    my_ems = opentumflex.initialize_time_setting(0,t_inval=15, start_time='2019-12-18 00:00', end_time='2019-12-18 23:45')
+    full_ems = opentumflex.initialize_time_setting(0,t_inval=15, start_time='2019-12-18 00:00', end_time='2019-12-20 23:45')
     if scenario == opentumflex.scenario_fromfile:
         # read devices parameters and forecasting data from xlsx or csv file
-        my_ems = opentumflex.read_data(my_ems, path_input, fcst_only=False, to_csv=convert_input_tocsv)
+        my_ems = opentumflex.read_data(my_ems,init_time_step,end_step, path_input, fcst_only=False, to_csv=convert_input_tocsv)
+        full_ems = opentumflex.read_data(full_ems,init_time_step,-1, path_input, fcst_only=False, to_csv=convert_input_tocsv)
     else:
         # read only the input time series from the excel table
-        my_ems = opentumflex.read_data(my_ems, path_input, fcst_only=False, to_csv=convert_input_tocsv)
+        my_ems = opentumflex.read_data(my_ems,init_time_step ,end_step , path_input, fcst_only=False, to_csv=convert_input_tocsv)
+        
         # modify the opentumflex regarding to predefined scenario
         my_ems = scenario(my_ems)
-
+        
+        # read only the input time series from the excel table
+        full_ems = opentumflex.read_data(full_ems,init_time_step,-1, path_input, fcst_only=False, to_csv=convert_input_tocsv)
+        
+        # modify the opentumflex regarding to predefined scenario
+        full_ems = scenario(full_ems)
+    
+    
     # create Pyomo model from opentumflex data
     m = opentumflex.create_model(my_ems)
 
@@ -59,6 +71,20 @@ def run_scenario(scenario, path_input, path_results, solver='glpk', time_limit=3
 
     # extract the results from model and store them in opentumflex['optplan'] dictionary
     my_ems = opentumflex.extract_res(m, my_ems)
+    
+    
+    
+    # create Pyomo model from opentumflex data
+    mf = opentumflex.create_model(full_ems)
+
+    # solve the optimization problem
+    mf = opentumflex.solve_model(mf, solver=solver, time_limit=time_limit, troubleshooting=troubleshooting)
+
+    # extract the results from model and store them in opentumflex['optplan'] dictionary
+    full_ems = opentumflex.extract_res(mf, full_ems)
+    
+
+    
 
     # visualize the optimization results
     opentumflex.plot_optimal_results(my_ems, show_balance=show_opt_balance, show_soc=show_opt_soc)
@@ -79,6 +105,7 @@ def run_scenario(scenario, path_input, path_results, solver='glpk', time_limit=3
     for function, device_name in calc_flex.items():
         if my_ems['devices'][device_name]['maxpow'] != 0:
             function(my_ems, reopt=False)
+            function(full_ems, reopt=False)
 
     # plot the results of flexibility calculation
     if show_flex_res:
@@ -95,7 +122,28 @@ def run_scenario(scenario, path_input, path_results, solver='glpk', time_limit=3
     if save_flex_offers:
         opentumflex.save_offers(my_ems, market='comax')
     
-    return my_ems
+    my_ems['reoptim']['flexstep'] = my_ems['time_data']['nsteps'] 
+    
+    pd.set_option("display.max_rows", None, "display.max_columns", None)
+    A= pd.DataFrame()
+    
+    date_time = []
+    for num in range(len(my_ems['time_data']['time_slots'])):
+        date_time.append(my_ems['time_data']['time_slots'][num])
+    date_time = pd.DataFrame(date_time,columns = ['Time'])
+    A = pd.concat([A, date_time],axis=1)
+  
+    
+    key_list = list(my_ems['flexopts'])
+    for comp in key_list:
+        
+        A = pd.concat([A, my_ems['flexopts'][comp]['Pos_P'], my_ems['flexopts'][comp]['Neg_P']],axis=1)
+    
+    
+    print(A)
+    
+    
+    return my_ems,full_ems
 
 
 if __name__ == '__main__':

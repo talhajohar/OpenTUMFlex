@@ -230,7 +230,9 @@ def create_device(device_name, minpow=0, maxpow=0, stocap=0, eta=1, init_soc=60,
     # Update device: Bat
     elif device_name == 'bat':
         df_unit_bat = unit
+       
         dict_bat = {device_name: df_unit_bat}
+        
         return dict_bat
 
     # for other situations: battery, chp, pv

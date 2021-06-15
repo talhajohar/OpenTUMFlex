@@ -78,7 +78,7 @@ def update_time_data(ems):
     return dict_time_data
 
 
-def read_data(ems, path=None, to_csv=False, fcst_only=True):
+def read_data(ems,init_time_step=0,end_step=-1, path=None, to_csv=False, fcst_only=True):
     """ read device parameters or forecasting data from input file
 
     :param ems: ems object
@@ -87,7 +87,6 @@ def read_data(ems, path=None, to_csv=False, fcst_only=True):
     :param fcst_only: if False,  forecasting data and device parameters will be read, otherwise only forecasting data
     :return: ems object updated by the input data
     """
-
     # Check for the file type 
     if path.endswith('.xlsx'):
         print('Reading your excel file, please wait!')
@@ -117,7 +116,11 @@ def read_data(ems, path=None, to_csv=False, fcst_only=True):
     elif path.endswith('.csv'):
         csv_data = pd.read_csv(path, sep=';', index_col=0)
         prop = csv_data.iloc[:, 0:2].dropna(how='all')
-        ts = csv_data.iloc[:, 2:].dropna(how='all')
+        if end_step == -1:
+            ts = csv_data.iloc[:, 2:].dropna(how='all')
+        else:
+            ts = csv_data.iloc[:end_step+len(prop), 2:].dropna(how='all')
+        ts = ts.iloc[init_time_step:,:]
         # read device parameters
         if not fcst_only:
             read_properties(ems, prop)

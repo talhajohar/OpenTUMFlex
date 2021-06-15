@@ -14,13 +14,15 @@ __status__ = "Development"
 from opentumflex.configuration.init_ems import init_ems_js as ems_loc
 # from opentumflex.flex.flex_draw import plot_flex as plot_flex
 import pandas as pd
-
+import numpy as np
 
 def calc_flex_pv(my_ems, reopt):
     # Find whether optimization or reoptimization
     if reopt == 0:
         dat1 = my_ems['optplan']['pv_pv2grid'] 
         dat2 = my_ems['optplan']['PV_power']    
+        dat3 = my_ems['optplan']['pv_pv2demand']
+        
     elif reopt == 1:
         dat1 = my_ems['reoptim']['optplan']['pv_pv2grid'] 
         dat2 = my_ems['reoptim']['optplan']['PV_power'] 
@@ -29,15 +31,28 @@ def calc_flex_pv(my_ems, reopt):
     ntsteps = my_ems['time_data']['ntsteps']
     PV_flex = pd.DataFrame(0, index=range(nsteps), columns=range(7))
     PV_flex.columns = ['Sch_P', 'Neg_P', 'Pos_P', 'Neg_E', 'Pos_E', 'Neg_Pr', 'Pos_Pr']
-
-    # PV negative flexibility
+    
+    pv2bat = np.array(dat2)-np.array(dat3)-np.array(dat1) # PV power going to battery
+    
+    # PV positive flexibility
     for i in range(0, nsteps):
-        PV_flex.iloc[i, 0] = dat2[i]
+        
+        if pv2bat[i] > 0:
+            PV_flex.iloc[i, 2] = pv2bat[i]
+        if pv2bat[i] > 0.1:  # min_export
+            j = i 
+            while j < nsteps and pv2bat[i] <= pv2bat[j]:
+                j = j + 1
+            
+            PV_flex.iloc[i, 4] = PV_flex.iloc[i, 2] * (j-i) / ntsteps
+    #PV negative flexibility
+    for i in range(0, nsteps):
+        PV_flex.iloc[i, 0] = dat1[i]
         if dat2[i] > 0.1:  # min_export
             j = i 
-            while j < nsteps and dat2[i] <= dat2[j]:
+            while j < nsteps and dat1[i] <= dat1[j]:
                 j = j + 1
-            PV_flex.iloc[i, 1] = -1 * dat2[i]
+            PV_flex.iloc[i, 1] = -1 * dat1[i]
             PV_flex.iloc[i, 3] = PV_flex.iloc[i, 1] * (j-i) / ntsteps
 
     # PV negative flexibility pricing
